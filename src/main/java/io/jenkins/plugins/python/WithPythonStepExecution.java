@@ -120,12 +120,18 @@ public class WithPythonStepExecution extends StepExecution implements Serializab
             configureCudaEnvironment(step, node, launcher, listener, additions);
         }
 
-        // 3. Virtual Environment Support
+        // 3. Astral uv Support (Fast Rust-based Python package & project manager)
+        String uvExe = null;
+        if (step.isUvEnabled()) {
+            uvExe = configureUvEnvironment(step, ws, node, launcher, listener, basePythonHome, basePythonExe, additions);
+        }
+
+        // 4. Virtual Environment Support
         if (step.getVenv() != null && !step.getVenv().isEmpty()) {
             if (ws == null) {
                 throw new AbortException("[withPython] Workspace is required to provision virtual environment.");
             }
-            provisionVirtualenv(step, ws, node, launcher, listener, basePythonExe, additions, deletions);
+            provisionVirtualenv(step, ws, node, launcher, listener, basePythonExe, uvExe, additions, deletions);
         }
 
         EnvironmentExpander expander = EnvironmentExpander.merge(
@@ -141,8 +147,71 @@ public class WithPythonStepExecution extends StepExecution implements Serializab
         return false;
     }
 
+    private String configureUvEnvironment(WithPythonStep step, FilePath ws, Node node, Launcher launcher,
+                                          TaskListener listener, String basePythonHome, String basePythonExe,
+                                          Map<String, String> additions)
+            throws IOException, InterruptedException {
+        boolean isUnix = launcher != null ? launcher.isUnix() : true;
+        FilePath uvBinDir = null;
+
+        String requestedUvVersion = UvInstaller.normalizeVersion(step.getUvVersion());
+        String effectiveUvMirror = step.getUvMirrorUrl() != null && !step.getUvMirrorUrl().isEmpty()
+                ? step.getUvMirrorUrl()
+                : step.getMirrorUrl();
+
+        // Check if uv is already pre-bundled in the resolved Python home (when no custom version/mirror is requested)
+        if ("latest".equals(requestedUvVersion) && effectiveUvMirror == null
+                && basePythonHome != null && !basePythonHome.isEmpty()) {
+            FilePath pyHomePath = node != null ? node.createPath(basePythonHome) : null;
+            if (pyHomePath != null) {
+                uvBinDir = UvInstaller.findExistingUvBinDir(pyHomePath);
+            }
+        }
+
+        if (uvBinDir == null) {
+            uvBinDir = UvInstaller.provisionUv(node, ws, listener, requestedUvVersion, effectiveUvMirror);
+        }
+
+        FilePath uvExecutablePath = UvInstaller.getUvExecutable(uvBinDir, isUnix);
+        String uvExeRemote = uvExecutablePath.getRemote();
+
+        // Prepend uv directory onto PATH if not already included
+        String uvBinRemote = uvBinDir.getRemote();
+        String existingPath = additions.get("PATH");
+        String sep = isUnix ? ":" : ";";
+        if (existingPath != null && !existingPath.isEmpty()) {
+            if (!existingPath.contains(uvBinRemote)) {
+                additions.put("PATH", uvBinRemote + sep + existingPath);
+            }
+        } else {
+            additions.put("PATH", uvBinRemote);
+        }
+
+        // Bind UV_PYTHON to the active Python executable resolved by withPython
+        if (basePythonExe != null && !basePythonExe.isEmpty()) {
+            additions.put("UV_PYTHON", basePythonExe);
+        }
+
+        // Configure optional UV_CACHE_DIR
+        if (step.getUvCacheDir() != null && !step.getUvCacheDir().isEmpty()) {
+            String cacheSpec = step.getUvCacheDir();
+            String resolvedCache = cacheSpec;
+            if (ws != null && !cacheSpec.startsWith("/") && !cacheSpec.contains(":")) {
+                resolvedCache = ws.child(cacheSpec).getRemote();
+            }
+            additions.put("UV_CACHE_DIR", resolvedCache);
+        }
+
+        if (listener != null) {
+            listener.getLogger().println("[withPython] Configured Astral uv environment: uv=" + uvExeRemote
+                    + (basePythonExe != null ? " (UV_PYTHON=" + basePythonExe + ")" : ""));
+        }
+
+        return uvExeRemote;
+    }
+
     private void provisionVirtualenv(WithPythonStep step, FilePath ws, Node node, Launcher launcher,
-                                     TaskListener listener, String basePythonExe,
+                                     TaskListener listener, String basePythonExe, String uvExe,
                                      Map<String, String> additions, Set<String> deletions)
             throws IOException, InterruptedException {
         String venvSpec = step.getVenv();
@@ -159,24 +228,37 @@ public class WithPythonStepExecution extends StepExecution implements Serializab
         }
 
         if (!pyvenvCfg.exists()) {
-            if (listener != null) {
-                listener.getLogger().println("[withPython] Provisioning virtual environment at: " + venvDir.getRemote());
-            }
-
             if (basePythonExe == null || basePythonExe.isEmpty()) {
                 basePythonExe = isUnix ? "python3" : "python.exe";
             }
 
             ArgumentListBuilder cmd = new ArgumentListBuilder();
-            cmd.add(basePythonExe);
-            cmd.add("-m", "venv");
-            if (step.isClear()) {
-                cmd.add("--clear");
+            if (uvExe != null && !uvExe.isEmpty()) {
+                if (listener != null) {
+                    listener.getLogger().println("[withPython] Provisioning virtual environment with Astral uv at: " + venvDir.getRemote());
+                }
+                cmd.add(uvExe, "venv", "--seed", "--python", basePythonExe);
+                if (step.isClear()) {
+                    cmd.add("--clear");
+                }
+                if (step.isSystemSitePackages()) {
+                    cmd.add("--system-site-packages");
+                }
+                cmd.add(venvDir.getRemote());
+            } else {
+                if (listener != null) {
+                    listener.getLogger().println("[withPython] Provisioning virtual environment at: " + venvDir.getRemote());
+                }
+                cmd.add(basePythonExe);
+                cmd.add("-m", "venv");
+                if (step.isClear()) {
+                    cmd.add("--clear");
+                }
+                if (step.isSystemSitePackages()) {
+                    cmd.add("--system-site-packages");
+                }
+                cmd.add(venvDir.getRemote());
             }
-            if (step.isSystemSitePackages()) {
-                cmd.add("--system-site-packages");
-            }
-            cmd.add(venvDir.getRemote());
 
             EnvVars execEnv = new EnvVars();
             for (Map.Entry<String, String> entry : additions.entrySet()) {
@@ -214,6 +296,13 @@ public class WithPythonStepExecution extends StepExecution implements Serializab
 
         additions.put("VIRTUAL_ENV", venvDir.getRemote());
         additions.put("VIRTUAL_ENV_PROMPT", venvDir.getName());
+
+        if (step.isUvEnabled()) {
+            String venvPython = isUnix
+                    ? venvBin.child("python3").getRemote()
+                    : venvBin.child("python.exe").getRemote();
+            additions.put("UV_PYTHON", venvPython);
+        }
 
         // Prepend venv bin directory onto PATH
         String existingPath = additions.get("PATH");

@@ -33,6 +33,9 @@ public class PythonInstaller extends ToolInstaller {
 
     private final String id;
     private String mirrorUrl;
+    private boolean installUv;
+    private String uvVersion;
+    private String uvMirrorUrl;
 
     @DataBoundConstructor
     public PythonInstaller(String id) {
@@ -51,6 +54,37 @@ public class PythonInstaller extends ToolInstaller {
     @DataBoundSetter
     public void setMirrorUrl(String mirrorUrl) {
         this.mirrorUrl = Util.fixEmptyAndTrim(mirrorUrl);
+    }
+
+    public boolean isInstallUv() {
+        return installUv;
+    }
+
+    @DataBoundSetter
+    public void setInstallUv(boolean installUv) {
+        this.installUv = installUv;
+    }
+
+    public String getUvVersion() {
+        return uvVersion;
+    }
+
+    @DataBoundSetter
+    public void setUvVersion(String uvVersion) {
+        this.uvVersion = Util.fixEmptyAndTrim(uvVersion);
+    }
+
+    public String getUvMirrorUrl() {
+        return uvMirrorUrl;
+    }
+
+    @DataBoundSetter
+    public void setUvMirrorUrl(String uvMirrorUrl) {
+        this.uvMirrorUrl = Util.fixEmptyAndTrim(uvMirrorUrl);
+    }
+
+    public boolean isUvEnabled() {
+        return installUv || (uvVersion != null && !uvVersion.isEmpty());
     }
 
     @Override
@@ -77,8 +111,9 @@ public class PythonInstaller extends ToolInstaller {
             downloadUrl = baseUrl + download.getFilename();
         }
 
+        String uvMarkerSuffix = isUvEnabled() ? "+uv:" + UvInstaller.normalizeVersion(uvVersion) : "";
         FilePath marker = expected.child(".installed-python-version");
-        String markerContent = resolvedVersion + "@" + downloadUrl;
+        String markerContent = resolvedVersion + "@" + downloadUrl + uvMarkerSuffix;
 
         if (marker.exists()) {
             try {
@@ -173,6 +208,10 @@ public class PythonInstaller extends ToolInstaller {
                     }
                 }
             }
+        }
+
+        if (isUvEnabled()) {
+            UvInstaller.installIntoPythonHome(pyHome, node, log, uvVersion, uvMirrorUrl);
         }
 
         marker.write(markerContent, "UTF-8");

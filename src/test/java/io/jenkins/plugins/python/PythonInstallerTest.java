@@ -40,4 +40,22 @@ class PythonInstallerTest {
         assertEquals(FormValidation.Kind.OK, desc.doCheckId("latest").kind);
         assertEquals(FormValidation.Kind.WARNING, desc.doCheckId("9.99.99").kind);
     }
+
+    @Test
+    void testUvOptions() {
+        PythonInstaller installer = new PythonInstaller("3.12.15");
+        assertFalse(installer.isInstallUv());
+        assertFalse(installer.isUvEnabled());
+
+        installer.setInstallUv(true);
+        assertTrue(installer.isInstallUv());
+        assertTrue(installer.isUvEnabled());
+
+        installer.setInstallUv(false);
+        installer.setUvVersion("0.13.1");
+        installer.setUvMirrorUrl("https://mirror.corp.internal/uv/");
+        assertEquals("0.13.1", installer.getUvVersion());
+        assertEquals("https://mirror.corp.internal/uv/", installer.getUvMirrorUrl());
+        assertTrue(installer.isUvEnabled());
+    }
 }
