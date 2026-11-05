@@ -246,7 +246,9 @@ public class PythonInstaller extends ToolInstaller {
         public ListBoxModel doFillIdItems() {
             Jenkins instance = Jenkins.getInstanceOrNull();
             if (instance != null) {
-                instance.checkPermission(Jenkins.ADMINISTER);
+                if (!instance.hasPermission(Jenkins.ADMINISTER)) {
+                    instance.checkPermission(Jenkins.MANAGE);
+                }
             }
             ListBoxModel model = new ListBoxModel();
             PythonVersionCatalog catalog = PythonVersionCatalog.getInstance();
@@ -263,7 +265,9 @@ public class PythonInstaller extends ToolInstaller {
         public FormValidation doCheckId(@QueryParameter String value) {
             Jenkins instance = Jenkins.getInstanceOrNull();
             if (instance != null) {
-                instance.checkPermission(Jenkins.ADMINISTER);
+                if (!instance.hasPermission(Jenkins.ADMINISTER)) {
+                    instance.checkPermission(Jenkins.MANAGE);
+                }
             }
             if (value == null || value.trim().isEmpty()) {
                 return FormValidation.error("Python version must be specified.");

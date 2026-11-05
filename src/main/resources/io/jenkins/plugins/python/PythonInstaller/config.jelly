@@ -9,10 +9,10 @@
   <f:entry title="${%Install Astral uv alongside Python}" field="installUv">
     <f:checkbox />
   </f:entry>
-  <f:entry title="${%Astral uv Version (Optional, defaults to 'latest')}" field="uvVersion">
-    <f:textbox />
+  <f:entry title="${%Astral uv Version}" field="uvVersion" description="${%Optional Astral uv release version, defaults to latest}">
+    <f:textbox default="latest" />
   </f:entry>
-  <f:entry title="${%Custom Astral uv Mirror Base URL}" field="uvMirrorUrl">
+  <f:entry title="${%Custom Astral uv Mirror Base URL}" field="uvMirrorUrl" description="${%Optional custom mirror URL for Astral uv release binaries}">
     <f:textbox />
   </f:entry>
 </j:jelly>
