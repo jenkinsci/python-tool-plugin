@@ -269,10 +269,6 @@ public class PythonInstaller extends ToolInstaller {
             return (latest != null && !latest.isEmpty()) ? latest : "latest";
         }
 
-        public ListBoxModel doFillIdItems() {
-            return doFillIdItems(null);
-        }
-
         @POST
         @SuppressWarnings({"lgtm[jenkins/no-permission-check]", "lgtm[jenkins/csrf]"})
         public ListBoxModel doFillIdItems(@QueryParameter String id) {

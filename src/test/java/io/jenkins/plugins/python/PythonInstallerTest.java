@@ -25,7 +25,7 @@ class PythonInstallerTest {
         assertFalse(defaultId.isEmpty());
         assertEquals(FormValidation.Kind.OK, desc.doCheckId(defaultId).kind);
 
-        ListBoxModel items = desc.doFillIdItems();
+        ListBoxModel items = desc.doFillIdItems(null);
         assertNotNull(items);
         assertFalse(items.isEmpty(), "Version dropdown should have items");
         assertTrue(items.size() >= 5);
