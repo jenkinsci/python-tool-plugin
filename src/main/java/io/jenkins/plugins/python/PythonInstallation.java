@@ -96,7 +96,9 @@ public class PythonInstallation extends ToolInstallation implements
 
         @Override
         public List<? extends ToolInstaller> getDefaultInstallers() {
-            return Collections.singletonList(new PythonInstaller("latest"));
+            String defaultId = PythonVersionCatalog.getInstance().getLatestVersion();
+            return Collections.singletonList(new PythonInstaller(
+                    defaultId != null && !defaultId.isEmpty() ? defaultId : "latest"));
         }
 
         @Override

@@ -4,6 +4,7 @@ import hudson.EnvVars;
 import hudson.tools.InstallSourceProperty;
 import hudson.tools.ToolInstaller;
 import hudson.tools.ToolInstallerDescriptor;
+import hudson.util.FormValidation;
 import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
@@ -55,7 +56,12 @@ class PythonInstallationTest {
         assertNotNull(defaultInstallers);
         assertEquals(1, defaultInstallers.size(), "PythonInstallation should default to PythonInstaller");
         assertTrue(defaultInstallers.get(0) instanceof PythonInstaller);
-        assertEquals("latest", ((PythonInstaller) defaultInstallers.get(0)).getId());
+        String defaultId = ((PythonInstaller) defaultInstallers.get(0)).getId();
+        assertEquals(PythonVersionCatalog.getInstance().getLatestVersion(), defaultId);
+
+        PythonInstaller.DescriptorImpl installerDesc = jenkins.jenkins.getDescriptorByType(PythonInstaller.DescriptorImpl.class);
+        assertEquals(FormValidation.Kind.OK, installerDesc.doCheckId(defaultId).kind);
+        assertTrue(installerDesc.doFillIdItems(null).stream().anyMatch(o -> o.value.equals(defaultId)));
 
         List<ToolInstallerDescriptor<?>> applicable = ToolInstallerDescriptor.for_(PythonInstallation.class);
         assertTrue(

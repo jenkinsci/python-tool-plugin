@@ -260,9 +260,22 @@ public class PythonInstaller extends ToolInstaller {
             return toolType == PythonInstallation.class;
         }
 
+        /**
+         * Returns the default Python version ID pre-selected when adding a new installer in the UI,
+         * preventing an empty initial {@code <select>} value before {@link #doFillIdItems(String)} completes.
+         */
+        public String getDefaultId() {
+            String latest = PythonVersionCatalog.getInstance().getLatestVersion();
+            return (latest != null && !latest.isEmpty()) ? latest : "latest";
+        }
+
+        public ListBoxModel doFillIdItems() {
+            return doFillIdItems(null);
+        }
+
         @POST
         @SuppressWarnings({"lgtm[jenkins/no-permission-check]", "lgtm[jenkins/csrf]"})
-        public ListBoxModel doFillIdItems() {
+        public ListBoxModel doFillIdItems(@QueryParameter String id) {
             Jenkins instance = Jenkins.getInstanceOrNull();
             if (instance != null) {
                 if (!instance.hasPermission(Jenkins.ADMINISTER)) {
@@ -272,6 +285,16 @@ public class PythonInstaller extends ToolInstaller {
             ListBoxModel model = new ListBoxModel();
             PythonVersionCatalog catalog = PythonVersionCatalog.getInstance();
             List<String> versions = catalog.getAvailableVersions();
+
+            String trimmedId = Util.fixEmptyAndTrim(id);
+            if (trimmedId != null && !versions.contains(trimmedId)) {
+                String resolved = catalog.resolveVersion(trimmedId);
+                if (catalog.getRelease(resolved) != null && !resolved.equals(trimmedId)) {
+                    model.add("Python " + trimmedId + " (" + resolved + ")", trimmedId);
+                } else {
+                    model.add("Python " + trimmedId, trimmedId);
+                }
+            }
 
             for (String v : versions) {
                 model.add("Python " + v, v);
