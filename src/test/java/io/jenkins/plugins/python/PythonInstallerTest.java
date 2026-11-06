@@ -18,13 +18,23 @@ class PythonInstallerTest {
     }
 
     @Test
-    void testDescriptorItems() {
+    void testDescriptorItemsAndDefaultId() {
         PythonInstaller.DescriptorImpl desc = new PythonInstaller.DescriptorImpl();
-        ListBoxModel items = desc.doFillIdItems();
+        String defaultId = desc.getDefaultId();
+        assertNotNull(defaultId);
+        assertFalse(defaultId.isEmpty());
+        assertEquals(FormValidation.Kind.OK, desc.doCheckId(defaultId).kind);
 
+        ListBoxModel items = desc.doFillIdItems(null);
         assertNotNull(items);
         assertFalse(items.isEmpty(), "Version dropdown should have items");
         assertTrue(items.size() >= 5);
+        assertEquals(defaultId, items.get(0).value, "First dropdown option should match defaultId");
+
+        // Minor-version prefix configured via JCasC should be preserved in dropdown options
+        ListBoxModel prefixItems = desc.doFillIdItems("3.12");
+        assertEquals("3.12", prefixItems.get(0).value);
+        assertTrue(prefixItems.get(0).name.contains("3.12."));
     }
 
     @Test

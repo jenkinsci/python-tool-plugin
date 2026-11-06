@@ -1,7 +1,7 @@
 <?jelly escape-by-default='true'?>
 <j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
   <f:entry title="${%Python Version}" field="id">
-    <f:select />
+    <f:select default="${descriptor.defaultId}" />
   </f:entry>
   <f:entry title="${%Custom Mirror Base URL}" field="mirrorUrl">
     <f:textbox />

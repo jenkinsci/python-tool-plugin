@@ -2,7 +2,6 @@ package io.jenkins.plugins.python;
 
 import hudson.EnvVars;
 import hudson.Extension;
-import hudson.FilePath;
 import hudson.Launcher;
 import hudson.Util;
 import hudson.model.EnvironmentSpecific;
@@ -11,14 +10,12 @@ import hudson.model.TaskListener;
 import hudson.slaves.NodeSpecific;
 import hudson.tools.ToolDescriptor;
 import hudson.tools.ToolInstallation;
+import hudson.tools.ToolInstaller;
 import hudson.tools.ToolProperty;
-import jenkins.security.MasterToSlaveCallable;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 
@@ -95,6 +92,13 @@ public class PythonInstallation extends ToolInstallation implements
         @Override
         public String getDisplayName() {
             return "Python";
+        }
+
+        @Override
+        public List<? extends ToolInstaller> getDefaultInstallers() {
+            String defaultId = PythonVersionCatalog.getInstance().getLatestVersion();
+            return Collections.singletonList(new PythonInstaller(
+                    defaultId != null && !defaultId.isEmpty() ? defaultId : "latest"));
         }
 
         @Override
