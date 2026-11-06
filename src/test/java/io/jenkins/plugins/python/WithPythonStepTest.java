@@ -131,4 +131,64 @@ class WithPythonStepTest {
         jenkins.assertLogContains("WITH_VENV_PYTHONHOME=UNSET", build);
         jenkins.assertLogContains("[withPython] Activated virtual environment", build);
     }
+
+    @Test
+    void testWithPythonUvEnvironment(JenkinsRule jenkins) throws Exception {
+        File dummyHome = jenkins.createTmpDir();
+        File binDir = new File(dummyHome, "bin");
+        binDir.mkdirs();
+        new File(binDir, "uv").createNewFile();
+        File scriptsDir = new File(dummyHome, "Scripts");
+        scriptsDir.mkdirs();
+        new File(scriptsDir, "uv.exe").createNewFile();
+
+        PythonInstallation tool = new PythonInstallation("MockToolWithUv", dummyHome.getAbsolutePath(), Collections.emptyList());
+        jenkins.jenkins.getDescriptorByType(PythonInstallation.DescriptorImpl.class).setInstallations(tool);
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "test-with-python-uv");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n" +
+                "    withPython(tool: 'MockToolWithUv', uv: true, uvCacheDir: '.uv-cache') {\n" +
+                "        echo 'UV_PYTHON_IS=' + env.UV_PYTHON\n" +
+                "        echo 'UV_CACHE_DIR_IS=' + env.UV_CACHE_DIR\n" +
+                "    }\n" +
+                "}", true));
+
+        WorkflowRun build = jenkins.buildAndAssertStatus(Result.SUCCESS, job);
+        assertNotNull(build);
+        jenkins.assertLogContains("[withPython] Configured Astral uv environment", build);
+        jenkins.assertLogContains("UV_PYTHON_IS=", build);
+        jenkins.assertLogContains("UV_CACHE_DIR_IS=", build);
+        jenkins.assertLogContains(".uv-cache", build);
+    }
+
+    @Test
+    void testWithPythonUvAndVirtualenv(JenkinsRule jenkins) throws Exception {
+        File dummyHome = jenkins.createTmpDir();
+        File binDir = new File(dummyHome, "bin");
+        binDir.mkdirs();
+        new File(binDir, "uv").createNewFile();
+        File scriptsDir = new File(dummyHome, "Scripts");
+        scriptsDir.mkdirs();
+        new File(scriptsDir, "uv.exe").createNewFile();
+
+        PythonInstallation tool = new PythonInstallation("MockToolUvVenv", dummyHome.getAbsolutePath(), Collections.emptyList());
+        jenkins.jenkins.getDescriptorByType(PythonInstallation.DescriptorImpl.class).setInstallations(tool);
+
+        WorkflowJob job = jenkins.createProject(WorkflowJob.class, "test-with-python-uv-venv");
+        job.setDefinition(new CpsFlowDefinition(
+                "node {\n" +
+                "    writeFile file: '.venv-uv/pyvenv.cfg', text: 'home = /mock\\nversion = 3.12.0\\n'\n" +
+                "    withPython(tool: 'MockToolUvVenv', venv: '.venv-uv', uv: true) {\n" +
+                "        echo 'UV_VENV_DIR=' + env.VIRTUAL_ENV\n" +
+                "        echo 'UV_VENV_PYTHON=' + env.UV_PYTHON\n" +
+                "    }\n" +
+                "}", true));
+
+        WorkflowRun build = jenkins.buildAndAssertStatus(Result.SUCCESS, job);
+        assertNotNull(build);
+        jenkins.assertLogContains("[withPython] Configured Astral uv environment", build);
+        jenkins.assertLogContains("[withPython] Activated virtual environment", build);
+        jenkins.assertLogContains(".venv-uv", build);
+    }
 }

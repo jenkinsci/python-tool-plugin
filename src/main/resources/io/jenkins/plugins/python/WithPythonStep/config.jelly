@@ -30,4 +30,16 @@
   <f:entry title="${%Include System Site Packages}" field="systemSitePackages">
     <f:checkbox />
   </f:entry>
+  <f:entry title="${%Enable Astral uv}" field="uv" description="${%Fast Rust-based package installer and resolver}">
+    <f:checkbox default="true" />
+  </f:entry>
+  <f:entry title="${%Astral uv Version}" field="uvVersion" description="${%Optional Astral uv release version, defaults to latest}">
+    <f:textbox default="latest" />
+  </f:entry>
+  <f:entry title="${%Custom Astral uv Mirror Base URL}" field="uvMirrorUrl" description="${%Optional custom mirror URL for Astral uv release binaries}">
+    <f:textbox />
+  </f:entry>
+  <f:entry title="${%Custom Astral uv Cache Directory}" field="uvCacheDir" description="${%Custom directory for UV_CACHE_DIR}">
+    <f:textbox />
+  </f:entry>
 </j:jelly>

@@ -41,6 +41,10 @@ public class WithPythonStep extends Step implements Serializable {
     private boolean systemSitePackages;
     private boolean cuda;
     private String cudaHome;
+    private boolean uv;
+    private String uvVersion;
+    private String uvMirrorUrl;
+    private String uvCacheDir;
 
     @DataBoundConstructor
     public WithPythonStep(String version) {
@@ -135,6 +139,46 @@ public class WithPythonStep extends Step implements Serializable {
     @DataBoundSetter
     public void setCudaHome(String cudaHome) {
         this.cudaHome = Util.fixEmptyAndTrim(cudaHome);
+    }
+
+    public boolean isUv() {
+        return uv;
+    }
+
+    @DataBoundSetter
+    public void setUv(boolean uv) {
+        this.uv = uv;
+    }
+
+    public String getUvVersion() {
+        return uvVersion;
+    }
+
+    @DataBoundSetter
+    public void setUvVersion(String uvVersion) {
+        this.uvVersion = Util.fixEmptyAndTrim(uvVersion);
+    }
+
+    public String getUvMirrorUrl() {
+        return uvMirrorUrl;
+    }
+
+    @DataBoundSetter
+    public void setUvMirrorUrl(String uvMirrorUrl) {
+        this.uvMirrorUrl = Util.fixEmptyAndTrim(uvMirrorUrl);
+    }
+
+    public String getUvCacheDir() {
+        return uvCacheDir;
+    }
+
+    @DataBoundSetter
+    public void setUvCacheDir(String uvCacheDir) {
+        this.uvCacheDir = Util.fixEmptyAndTrim(uvCacheDir);
+    }
+
+    public boolean isUvEnabled() {
+        return uv || (uvVersion != null && !uvVersion.isEmpty());
     }
 
     @Override
