@@ -60,6 +60,72 @@ Similar to the Jenkins NodeJS and Go tool plugins, this plugin enables Jenkins j
 
 ---
 
+## Astral `uv` vs Standard Pip & Poetry Performance Benchmarks
+
+Empirical performance benchmarks measured inside Jenkins CI across **5 workload tiers** (3 iterations each):
+- **Host / Agent**: `Linux x86_64`
+- **Interpreters**: `Python 3.12.15` | `uv 0.13.7 (x86_64-unknown-linux-gnu)` | `Poetry (version 2.5.1)`
+- **Benchmark Date**: 2026-11-06 02:05:28 UTC
+
+### Benchmark Workload Tiers
+
+| Workload Tier | Description | Key Stack Dependencies |
+| :--- | :--- | :--- |
+| **`xsmall`** | CLI / Micro Utility Stack (~3 direct, ~10 resolved packages) | `requests==2.32.3`, `click==8.1.7`, `rich==13.9.4` |
+| **`small`** | Modern REST API Microservice (~5 direct, ~25 resolved packages) | `fastapi==0.115.4`, `uvicorn[standard]==0.32.0`, `pydantic==2.9.2`, `httpx==0.27.2`, `pytest==8.3.3` |
+| **`medium`** | Full-Stack Web, Async Worker, DB & Redis (~11 direct, ~50 resolved packages) | `fastapi==0.115.4`, `uvicorn[standard]==0.32.0`, `pydantic==2.9.2`, `pydantic-settings==2.6.1`, `sqlalchemy==2.0.36`, `alembic==1.13.3`, and 5 more |
+| **`large`** | Data Science, Analytics & API Stack (~10 direct, ~75 resolved packages) | `numpy==2.1.3`, `pandas==2.2.3`, `scipy==1.14.1`, `scikit-learn==1.5.2`, `matplotlib==3.9.2`, `seaborn==0.13.2`, and 4 more |
+| **`xlarge`** | Enterprise Multi-Stack: Polars, ML, Cloud SDK & DB (~17 direct, ~110 resolved packages) | `polars==1.13.1`, `pyarrow==18.0.0`, `numpy==2.1.3`, `pandas==2.2.3`, `scipy==1.14.1`, `scikit-learn==1.5.2`, and 11 more |
+
+### 1. Virtual Environment Provisioning (`python -m venv` vs `uv venv`)
+
+| Workload Tier | Standard `venv` (Mean ± Std) | Astral `uv venv` (Mean ± Std) | Speedup Multiplier |
+| :--- | :---: | :---: | :---: |
+| **`xsmall`** | 1.15s ± 0.03s | **0.01s ± 0.00s** | **127.7x faster** |
+| **`small`** | 1.14s ± 0.01s | **0.01s ± 0.00s** | **126.1x faster** |
+| **`medium`** | 1.16s ± 0.01s | **0.01s ± 0.00s** | **128.3x faster** |
+| **`large`** | 1.14s ± 0.01s | **0.01s ± 0.00s** | **126.9x faster** |
+| **`xlarge`** | 1.19s ± 0.03s | **0.01s ± 0.00s** | **132.1x faster** |
+
+### 2. Cold-Cache Package Installation (No-Cache / Fresh Build)
+
+| Workload Tier | Standard `pip install --no-cache-dir` | Astral `uv pip install --no-cache` | Speedup Multiplier |
+| :--- | :---: | :---: | :---: |
+| **`xsmall`** | 2.98s ± 0.15s | **0.83s ± 0.33s** | **3.6x faster** |
+| **`small`** | 5.51s ± 0.96s | **2.45s ± 0.41s** | **2.3x faster** |
+| **`medium`** | 10.20s ± 2.20s | **3.55s ± 0.89s** | **2.9x faster** |
+| **`large`** | 28.84s ± 0.39s | **13.28s ± 1.42s** | **2.2x faster** |
+| **`xlarge`** | 53.40s ± 2.65s | **35.43s ± 11.14s** | **1.5x faster** |
+
+### 3. Warm-Cache Package Installation (Pre-cached Wheels / Re-installs)
+
+| Workload Tier | Standard `pip install` (Cached) | Astral `uv pip install` (Cached) | Speedup Multiplier |
+| :--- | :---: | :---: | :---: |
+| **`xsmall`** | 1.53s ± 0.14s | **0.05s ± 0.00s** | **33.3x faster** |
+| **`small`** | 2.92s ± 0.31s | **0.06s ± 0.00s** | **51.3x faster** |
+| **`medium`** | 6.00s ± 0.86s | **0.09s ± 0.01s** | **70.6x faster** |
+| **`large`** | 13.06s ± 0.28s | **0.12s ± 0.01s** | **108.0x faster** |
+| **`xlarge`** | 17.59s ± 0.93s | **0.34s ± 0.01s** | **51.6x faster** |
+
+### 4. Poetry vs Astral `uv` CI Installation
+
+| Workload Tier | Standard `poetry install` (Cold) | Astral `uv` (Cold) | Cold Speedup | Standard `poetry install` (Warm) | Astral `uv` (Warm) | Warm Speedup |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **`xsmall`** | 1.13s | **0.83s** | **1.4x** | 0.61s | **0.05s** | **13.3x** |
+| **`small`** | 2.24s | **2.45s** | **0.9x** | 1.04s | **0.06s** | **18.3x** |
+| **`medium`** | 3.49s | **3.55s** | **1.0x** | 2.01s | **0.09s** | **23.7x** |
+| **`large`** | 14.61s | **13.28s** | **1.1x** | 5.20s | **0.12s** | **43.0x** |
+| **`xlarge`** | 28.68s | **35.43s** | **0.8x** | 8.99s | **0.34s** | **26.4x** |
+
+### Key Benchmark Takeaways
+
+- **Virtual Environment Creation**: Astral `uv venv` creates clean environments in **~10ms (0.01s)**, which is **126x to 132x faster** than standard `python -m venv` (~1.15s).
+- **Repeat CI Builds (Warm Cache)**: In standard CI pipelines where dependencies are cached, Astral `uv` installs packages in **0.05s to 0.34s** across all workload sizes, providing **33x to 108x speedups** over standard `pip`.
+- **Cold CI Builds (No Cache)**: Even without pre-existing cache, Astral `uv` completes downloads and builds **1.5x to 3.6x faster** than `pip`.
+- **Poetry Workloads**: Astral `uv` warm installations run **13x to 43x faster** than standard `poetry install` (e.g. 0.12s vs 5.20s on the 75-package `large` tier).
+
+---
+
 ## Pipeline Usage
 
 ### 1. Declarative Pipeline (`withPython` Step)
