@@ -84,7 +84,7 @@ public class PythonInstaller extends ToolInstaller {
     }
 
     public boolean isUvEnabled() {
-        return installUv || (uvVersion != null && !uvVersion.isEmpty());
+        return installUv || (uvVersion != null && !uvVersion.isEmpty() && !"latest".equalsIgnoreCase(uvVersion));
     }
 
     @Override
@@ -227,6 +227,25 @@ public class PythonInstaller extends ToolInstaller {
         return root;
     }
 
+    /**
+     * Builds the uv version choices shared by the tool installer and the pipeline step editors.
+     */
+    static ListBoxModel buildUvVersionItems(String currentValue) {
+        ListBoxModel model = new ListBoxModel();
+        model.add("latest", "latest");
+        List<String> catalogVersions = PythonVersionCatalog.getInstance().getUvVersions();
+        String trimmedCurrent = Util.fixEmptyAndTrim(currentValue);
+        if (trimmedCurrent != null
+                && !"latest".equalsIgnoreCase(trimmedCurrent)
+                && !catalogVersions.contains(trimmedCurrent)) {
+            model.add(trimmedCurrent, trimmedCurrent);
+        }
+        for (String v : catalogVersions) {
+            model.add(v, v);
+        }
+        return model;
+    }
+
     @Extension
     @Symbol("pythonStandalone")
     public static class DescriptorImpl extends ToolInstallerDescriptor<PythonInstaller> {
@@ -258,6 +277,22 @@ public class PythonInstaller extends ToolInstaller {
                 model.add("Python " + v, v);
             }
             return model;
+        }
+
+        /**
+         * Drop-down for the Astral uv version: "latest" first, then the known releases from the
+         * catalog, preserving any custom/mirror version value already configured.
+         */
+        @POST
+        @SuppressWarnings({"lgtm[jenkins/no-permission-check]", "lgtm[jenkins/csrf]"})
+        public ListBoxModel doFillUvVersionItems(@QueryParameter String uvVersion) {
+            Jenkins instance = Jenkins.getInstanceOrNull();
+            if (instance != null) {
+                if (!instance.hasPermission(Jenkins.ADMINISTER)) {
+                    instance.checkPermission(Jenkins.MANAGE);
+                }
+            }
+            return buildUvVersionItems(uvVersion);
         }
 
         @POST

@@ -3,7 +3,6 @@ package io.jenkins.plugins.python;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -16,13 +15,34 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PythonVersionCatalogTest {
 
     @Test
-    void testCatalogLoadsVersions() {
+    void testCatalogLoadsVersionsAndPreservesHistory() {
         PythonVersionCatalog catalog = PythonVersionCatalog.getInstance();
         List<String> versions = catalog.getAvailableVersions();
 
         assertNotNull(versions);
         assertFalse(versions.isEmpty(), "Catalog should contain Python versions");
-        assertTrue(versions.size() >= 5, "Catalog should have at least 5 versions");
+        assertTrue(versions.size() >= 15, "Catalog should retain historical and current Python versions");
+        assertTrue(versions.contains("3.14.7"), "Catalog should preserve older patch release 3.14.7");
+        assertTrue(versions.contains("3.13.15"), "Catalog should preserve older patch release 3.13.15");
+        assertTrue(versions.contains("3.12.14"), "Catalog should preserve older patch release 3.12.14");
+    }
+
+    @Test
+    void testCatalogLoadsUvVersions() {
+        PythonVersionCatalog catalog = PythonVersionCatalog.getInstance();
+        List<String> uvVersions = catalog.getUvVersions();
+
+        assertNotNull(uvVersions);
+        assertFalse(uvVersions.isEmpty(), "Catalog should contain Astral uv versions");
+        assertTrue(uvVersions.size() >= 10, "Catalog should contain multiple Astral uv versions");
+    }
+
+    @Test
+    void testDefaultRemoteUrlTargetsOfficialCatalogBranch() {
+        assertEquals(
+                "https://raw.githubusercontent.com/jenkinsci/python-tool-plugin/catalog/versions.json",
+                PythonVersionCatalog.DEFAULT_REMOTE_URL
+        );
     }
 
     @Test
@@ -87,7 +107,8 @@ class PythonVersionCatalogTest {
                 "        }\n" +
                 "      }\n" +
                 "    }\n" +
-                "  }\n" +
+                "  },\n" +
+                "  \"uvVersions\": [\"0.99.1\", \"0.99.0\"]\n" +
                 "}";
 
         Path overrideFile = tempDir.resolve("custom-versions.json");
@@ -101,6 +122,7 @@ class PythonVersionCatalogTest {
 
             assertTrue(catalog.getAvailableVersions().contains("3.99.1"));
             assertEquals("3.99.1", catalog.resolveVersion("3.99"));
+            assertEquals(List.of("0.99.1", "0.99.0"), catalog.getUvVersions());
             PythonVersionCatalog.PlatformDownload dl = catalog.getDownload("3.99.1", "linux-x86_64");
             assertNotNull(dl);
             assertEquals("https://internal.repo/cpython-3.99.1.tar.gz", dl.getUrl());

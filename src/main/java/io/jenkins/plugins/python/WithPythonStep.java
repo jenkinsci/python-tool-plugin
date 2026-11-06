@@ -2,6 +2,8 @@ package io.jenkins.plugins.python;
 
 import hudson.Extension;
 import hudson.Util;
+import hudson.util.ListBoxModel;
+import jenkins.model.Jenkins;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -9,6 +11,8 @@ import org.jenkinsci.plugins.workflow.steps.StepExecution;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.verb.POST;
 
 import java.io.Serializable;
 import java.util.Collections;
@@ -178,7 +182,7 @@ public class WithPythonStep extends Step implements Serializable {
     }
 
     public boolean isUvEnabled() {
-        return uv || (uvVersion != null && !uvVersion.isEmpty());
+        return uv || (uvVersion != null && !uvVersion.isEmpty() && !"latest".equalsIgnoreCase(uvVersion));
     }
 
     @Override
@@ -203,6 +207,16 @@ public class WithPythonStep extends Step implements Serializable {
         @Override
         public boolean takesImplicitBlockArgument() {
             return true;
+        }
+
+        @POST
+        @SuppressWarnings({"lgtm[jenkins/no-permission-check]", "lgtm[jenkins/csrf]"})
+        public ListBoxModel doFillUvVersionItems(@QueryParameter String uvVersion) {
+            Jenkins instance = Jenkins.getInstanceOrNull();
+            if (instance != null) {
+                instance.checkPermission(Jenkins.READ);
+            }
+            return PythonInstaller.buildUvVersionItems(uvVersion);
         }
 
         @Override

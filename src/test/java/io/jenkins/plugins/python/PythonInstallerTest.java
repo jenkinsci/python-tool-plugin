@@ -28,6 +28,20 @@ class PythonInstallerTest {
     }
 
     @Test
+    void testDescriptorUvVersionItems() {
+        PythonInstaller.DescriptorImpl desc = new PythonInstaller.DescriptorImpl();
+        ListBoxModel uvItems = desc.doFillUvVersionItems(null);
+
+        assertNotNull(uvItems);
+        assertTrue(uvItems.size() > 1, "uv version dropdown should include latest plus catalog versions");
+        assertEquals("latest", uvItems.get(0).value);
+
+        ListBoxModel customItems = desc.doFillUvVersionItems("0.9.99-custom");
+        assertEquals("latest", customItems.get(0).value);
+        assertEquals("0.9.99-custom", customItems.get(1).value);
+    }
+
+    @Test
     void testDescriptorValidation() {
         PythonInstaller.DescriptorImpl desc = new PythonInstaller.DescriptorImpl();
 
@@ -45,6 +59,10 @@ class PythonInstallerTest {
     void testUvOptions() {
         PythonInstaller installer = new PythonInstaller("3.12.15");
         assertFalse(installer.isInstallUv());
+        assertFalse(installer.isUvEnabled());
+
+        // Default "latest" from dropdown when installUv is unchecked should not enable uv
+        installer.setUvVersion("latest");
         assertFalse(installer.isUvEnabled());
 
         installer.setInstallUv(true);

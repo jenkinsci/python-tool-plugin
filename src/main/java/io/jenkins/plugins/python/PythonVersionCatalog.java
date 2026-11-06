@@ -31,13 +31,18 @@ public final class PythonVersionCatalog implements Serializable {
     private static final long serialVersionUID = 1L;
     private static final Logger LOGGER = Logger.getLogger(PythonVersionCatalog.class.getName());
 
+    /**
+     * Self-updating catalog published by the scheduled "Update Version Catalog" workflow to the
+     * {@code catalog} branch, so new Python/uv versions appear without a plugin release.
+     */
     public static final String DEFAULT_REMOTE_URL =
-            "https://raw.githubusercontent.com/reder9/python-tool-jenkins-plugin/main/src/main/resources/io/jenkins/plugins/python/versions.json";
+            "https://raw.githubusercontent.com/jenkinsci/python-tool-plugin/catalog/versions.json";
     private static final long CACHE_TTL_MS = 24 * 60 * 60 * 1000L; // 24 hours
 
     private static volatile PythonVersionCatalog instance;
 
     private final Map<String, PythonRelease> releases = new LinkedHashMap<>();
+    private final List<String> uvVersions = new ArrayList<>();
 
     public static class PlatformDownload implements Serializable {
         private static final long serialVersionUID = 1L;
@@ -116,6 +121,7 @@ public final class PythonVersionCatalog implements Serializable {
      */
     public synchronized void reload() {
         releases.clear();
+        uvVersions.clear();
         loadCatalog();
     }
 
@@ -229,12 +235,71 @@ public final class PythonVersionCatalog implements Serializable {
                     }
                     releases.put(ver, release);
                 }
+                sortReleasesNewestFirst();
+                parseUvVersions(root);
                 return true;
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "[Python Plugin] Invalid Python catalog JSON format: " + e.getMessage());
         }
         return false;
+    }
+
+    private void parseUvVersions(JSONObject root) {
+        uvVersions.clear();
+        if (!root.has("uvVersions")) {
+            return;
+        }
+        for (Object o : root.getJSONArray("uvVersions")) {
+            String v = String.valueOf(o).trim();
+            if (!v.isEmpty()) {
+                uvVersions.add(v);
+            }
+        }
+        uvVersions.sort(PythonVersionCatalog::compareVersionsDescending);
+    }
+
+    private void sortReleasesNewestFirst() {
+        List<Map.Entry<String, PythonRelease>> entries = new ArrayList<>(releases.entrySet());
+        entries.sort((a, b) -> compareVersionsDescending(a.getKey(), b.getKey()));
+        releases.clear();
+        for (Map.Entry<String, PythonRelease> e : entries) {
+            releases.put(e.getKey(), e.getValue());
+        }
+    }
+
+    /**
+     * Orders dotted numeric versions newest-first so that "latest" never depends on the
+     * key order of a hand-edited or merged catalog file. Non-numeric segments sort last.
+     */
+    static int compareVersionsDescending(String a, String b) {
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        int len = Math.max(pa.length, pb.length);
+        for (int i = 0; i < len; i++) {
+            long na = i < pa.length ? parseSegment(pa[i]) : 0;
+            long nb = i < pb.length ? parseSegment(pb[i]) : 0;
+            if (na != nb) {
+                return Long.compare(nb, na);
+            }
+        }
+        return 0;
+    }
+
+    private static long parseSegment(String segment) {
+        try {
+            return Long.parseLong(segment);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /**
+     * Known Astral uv releases, newest first. May be empty for catalogs that predate uv version
+     * listing, in which case callers should only offer "latest".
+     */
+    public List<String> getUvVersions() {
+        return new ArrayList<>(uvVersions);
     }
 
     public List<String> getAvailableVersions() {
