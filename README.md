@@ -1,154 +1,56 @@
 # Python Tool Jenkins Plugin
 
-[![CI](https://github.com/reder9/python-tool-jenkins-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/reder9/python-tool-jenkins-plugin/actions/workflows/ci.yml)
+[![CI](https://github.com/jenkinsci/python-tool-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/jenkinsci/python-tool-plugin/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Jenkins](https://img.shields.io/badge/Jenkins-2.479%2B-blue.svg)](https://www.jenkins.io/)
 [![SpotBugs](https://img.shields.io/badge/SpotBugs-Passed-brightgreen.svg)](https://spotbugs.github.io/)
 
-A production-grade Jenkins plugin that automates Python tool installation and runtime environment configuration across Windows, Linux, and macOS agents.
+A Jenkins plugin that automates standalone Python provisioning and runtime environment configuration across Windows, Linux, and macOS agents.
 
-Similar to the Jenkins NodeJS and Go tool plugins, this plugin enables Jenkins jobs to dynamically provision specific standalone Python versions without requiring pre-installed system packages, package managers (`apt`, `brew`, `choco`), build toolchains, or administrator/root permissions.
-
----
-
-## Comparison with Existing Jenkins Python Plugins
-
-| Feature / Capability | Python Tool Plugin (This Plugin) | ShiningPanda Plugin | Pyenv Pipeline Plugin |
-|---|---|---|---|
-| **Distribution Source** | Official pre-built standalone relocatable binaries from `astral-sh/python-build-standalone` | Host system Python paths or legacy installers | Compiles Python from source on agent via `pyenv` |
-| **System Prerequisites** | **Zero**. No compilers, no system headers, no root/admin access required | Requires Python/virtualenv already installed on agents | Requires `git`, `pyenv`, `gcc`, `make`, OpenSSL/zlib development libraries |
-| **Platform Architecture Support** | **Linux** (`x86_64`, `aarch64`, `armv7`, `ppc64le`, `s390x`, `musl`/Alpine)<br>**macOS** (`x86_64`, `aarch64` Apple Silicon)<br>**Windows** (`x86_64`, `aarch64`, `x86`) | Platform-dependent based on pre-installed agent binaries | Primarily Linux/macOS (requires `pyenv-win` on Windows) |
-| **Coexistence & Tool Namespace** | Tool registered as **Python** (`@Symbol("python")`) with automatic fallback support | Registered as "Python" | Re-uses ShiningPanda tool descriptors |
-| **Pipeline Integration** | Native modern pipeline step: `withPython(...)` supporting dynamic downloads, inline venv, **Astral `uv` / `uvx`**, and CUDA | Freestyle Builders and legacy pipeline wrappers | `withPythonEnv(...)` wrapper around pyenv |
-| **Package & Project Management** | Built-in **Astral `uv` & `uvx`** provisioning (10x–100x faster than `pip`) + standard `pip`/`venv` | Standard `pip` / `virtualenv` | Standard `pip` |
-| **Corporate Proxies & Air-Gapped** | Full Jenkins proxy support (`ProxyConfiguration`), `mirrorUrl`, `uvMirrorUrl`, dynamic update caching, and local `python-versions.json` override | Relies on Jenkins proxy configuration | Depends on access to pyenv github repositories |
+Similar to the NodeJS and Go tool plugins, this plugin enables Jenkins pipelines to dynamically provision specific standalone Python versions on-demand without requiring pre-installed system packages, package managers (`apt`, `brew`, `choco`), compiler toolchains, or administrator/root permissions.
 
 ---
 
-## Features
+## Key Highlights
 
-- **Automated Standalone Provisioning**: Downloads and unpacks self-contained standalone CPython distributions powered by Astral (`python-build-standalone`).
-- **Native Astral `uv` & `uvx` Integration**:
-  - `uv: true` (or `uvVersion: '0.13.1'`): Dynamically provisions and caches standalone `uv` and `uvx` binaries on the agent across all supported platforms.
-  - Automatically binds `UV_PYTHON` to the active Python executable (or active `.venv`) so `uv pip`, `uv sync`, and `uv run` target the exact Jenkins-provisioned interpreter without redundant downloads.
-  - When combined with `venv: '.venv'`, uses `uv venv` for near-instant (~50ms) virtual environment creation.
-- **Comprehensive Cross-Platform Support**:
-  - **Linux**: `linux-x86_64`, `linux-aarch64`, `linux-armv7`, `linux-ppc64le` (IBM Power), `linux-s390x` (IBM Z), and `musl` (Alpine Linux).
-  - **macOS**: `macos-x86_64` (Intel), `macos-aarch64` (Apple Silicon M-series).
-  - **Windows**: `windows-x86_64` (64-bit), `windows-aarch64` (ARM64), `windows-x86` (32-bit).
-- **Early Platform Validation**: Fails early with clear error diagnostics if run on an unsupported OS or CPU architecture instead of downloading incompatible binaries.
-- **Pipeline Integration**:
-  - `withPython(version: '3.12.15')`: Dynamically downloads and configures Python on-the-fly.
-  - `withPython(version: '3.12', uv: true)`: Provisions both Python and Astral `uv` / `uvx` on `PATH`.
-  - `withPython(tool: 'Python 3.12')`: Uses a pre-configured Python installation from Global Tool Configuration.
-  - `withPython(version: '3.12', venv: '.venv')`: Transparently provisions and activates an isolated virtual environment.
-  - Declarative `tools { python '...' }` directive support.
-- **Environment Management**:
-  - Injects Python executable and scripts directory into `PATH`.
-  - Sets `PYTHONHOME` to the standalone distribution root (and unsets it cleanly inside virtual environments).
-  - Sets `PYTHONUNBUFFERED=1` for real-time Jenkins console output streaming.
-  - Sets `UV_PYTHON` and optional `UV_CACHE_DIR` when `uv` is enabled.
-- **Corporate Proxy & Air-Gapped Support**:
-  - Fully honors Jenkins proxy settings via `ProxyConfiguration.open(URL)`.
-  - `mirrorUrl` & `uvMirrorUrl`: Download standalone Python and `uv` archives from internal Artifactory/Nexus mirrors.
-  - Local catalog override: Place `python-versions.json` in `$JENKINS_HOME` or set `-Dio.jenkins.plugins.python.versionsFile=/path/to/versions.json`.
-- **Dynamic Catalog Fetching**:
-  - Periodically checks and caches upstream version updates without requiring a new plugin release.
-  - Gracefully falls back to cached or bundled version catalogs when offline.
-- **CUDA / GPU Acceleration**:
-  - `cuda: true`: Automatically probes agent CUDA drivers and toolkits (`CUDA_HOME`, `/usr/local/cuda`, `nvcc`), injecting CUDA paths and libraries (`LD_LIBRARY_PATH`, `PATH`) with graceful fallback to CPU.
+- **Zero Agent Prerequisites**: Automatically downloads official, relocatable standalone CPython distributions from [python-build-standalone](https://github.com/astral-sh/python-build-standalone).
+- **Native Astral `uv` & `uvx` Acceleration**: Provision Astral `uv` on-the-fly (`uv: true`) for **10x to 100x+ faster** virtual environments and package installations.
+- **Cross-Platform**: Full support for Linux (`x86_64`, `aarch64`, `armv7`, `ppc64le`, `s390x`, `musl`), macOS (`Intel`, `Apple Silicon`), and Windows (`x86_64`, `arm64`, `x86`).
+- **Flexible Pipeline Step**: `withPython(...)` supports dynamic version downloads, pre-configured tools, isolated virtual environments, CUDA GPU path injection, and corporate mirror URLs.
+- **Configuration as Code (JCasC)**: Fully configurable via `jenkins.yaml` with automatic tool installation.
 
 ---
 
-## Astral `uv` vs Standard Pip & Poetry Performance Benchmarks
+## Astral `uv` CI Acceleration: Performance & Benefits
 
-Empirical performance benchmarks measured inside Jenkins CI across **5 workload tiers** (3 iterations each):
-- **Host / Agent**: `Linux x86_64`
-- **Interpreters**: `Python 3.12.15` | `uv 0.13.7 (x86_64-unknown-linux-gnu)` | `Poetry (version 2.5.1)`
-- **Benchmark Date**: 2026-11-06 02:05:28 UTC
+In Python CI workflows, dependency resolution and package installation often consume 60% to 80% of total build time. This plugin integrates native Astral `uv` support (`uv: true`), replacing standard `pip` and `venv` operations with Astral's high-performance Rust toolchain.
 
-### Benchmark Workload Tiers
+### Empirical CI Benchmarks (Linux x86_64 Agent)
 
-| Workload Tier | Description | Key Stack Dependencies |
-| :--- | :--- | :--- |
-| **`xsmall`** | CLI / Micro Utility Stack (~3 direct, ~10 resolved packages) | `requests==2.32.3`, `click==8.1.7`, `rich==13.9.4` |
-| **`small`** | Modern REST API Microservice (~5 direct, ~25 resolved packages) | `fastapi==0.115.4`, `uvicorn[standard]==0.32.0`, `pydantic==2.9.2`, `httpx==0.27.2`, `pytest==8.3.3` |
-| **`medium`** | Full-Stack Web, Async Worker, DB & Redis (~11 direct, ~50 resolved packages) | `fastapi==0.115.4`, `uvicorn[standard]==0.32.0`, `pydantic==2.9.2`, `pydantic-settings==2.6.1`, `sqlalchemy==2.0.36`, `alembic==1.13.3`, and 5 more |
-| **`large`** | Data Science, Analytics & API Stack (~10 direct, ~75 resolved packages) | `numpy==2.1.3`, `pandas==2.2.3`, `scipy==1.14.1`, `scikit-learn==1.5.2`, `matplotlib==3.9.2`, `seaborn==0.13.2`, and 4 more |
-| **`xlarge`** | Enterprise Multi-Stack: Polars, ML, Cloud SDK & DB (~17 direct, ~110 resolved packages) | `polars==1.13.1`, `pyarrow==18.0.0`, `numpy==2.1.3`, `pandas==2.2.3`, `scipy==1.14.1`, `scikit-learn==1.5.2`, and 11 more |
+Measured inside Jenkins CI across 5 workload tiers (3 iterations each):
 
-### 1. Virtual Environment Provisioning (`python -m venv` vs `uv venv`)
+| Workload Tier | Resolved Packages | Standard `venv` vs `uv venv` | Standard `pip` (Warm Cache) | Astral `uv pip` (Warm Cache) | Warm Speedup | Standard `poetry` (Warm) | Astral `uv` vs Poetry |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **`xsmall`** (CLI utility) | ~10 | 1.15s vs **0.01s** | 1.53s | **0.05s** | **33.3x faster** | 0.61s | **13.3x faster** |
+| **`small`** (REST API) | ~25 | 1.14s vs **0.01s** | 2.92s | **0.06s** | **51.3x faster** | 1.04s | **18.3x faster** |
+| **`medium`** (Web + DB + Redis) | ~50 | 1.16s vs **0.01s** | 6.00s | **0.09s** | **70.6x faster** | 2.01s | **23.7x faster** |
+| **`large`** (Data Science / ML) | ~75 | 1.14s vs **0.01s** | 13.06s | **0.12s** | **108.0x faster** | 5.20s | **43.0x faster** |
+| **`xlarge`** (Enterprise Stack) | ~110 | 1.19s vs **0.01s** | 17.59s | **0.34s** | **51.6x faster** | 8.99s | **26.4x faster** |
 
-| Workload Tier | Standard `venv` (Mean ± Std) | Astral `uv venv` (Mean ± Std) | Speedup Multiplier |
-| :--- | :---: | :---: | :---: |
-| **`xsmall`** | 1.15s ± 0.03s | **0.01s ± 0.00s** | **127.7x faster** |
-| **`small`** | 1.14s ± 0.01s | **0.01s ± 0.00s** | **126.1x faster** |
-| **`medium`** | 1.16s ± 0.01s | **0.01s ± 0.00s** | **128.3x faster** |
-| **`large`** | 1.14s ± 0.01s | **0.01s ± 0.00s** | **126.9x faster** |
-| **`xlarge`** | 1.19s ± 0.03s | **0.01s ± 0.00s** | **132.1x faster** |
+*Even on cold builds (clean agents without pre-cached wheels), Astral `uv` finishes package installations **1.5x to 3.6x faster** due to parallel network streaming and non-blocking wheel unpacking.*
 
-### 2. Cold-Cache Package Installation (No-Cache / Fresh Build)
+### Why Use Astral `uv` in Your Pipelines?
 
-| Workload Tier | Standard `pip install --no-cache-dir` | Astral `uv pip install --no-cache` | Speedup Multiplier |
-| :--- | :---: | :---: | :---: |
-| **`xsmall`** | 2.98s ± 0.15s | **0.83s ± 0.33s** | **3.6x faster** |
-| **`small`** | 5.51s ± 0.96s | **2.45s ± 0.41s** | **2.3x faster** |
-| **`medium`** | 10.20s ± 2.20s | **3.55s ± 0.89s** | **2.9x faster** |
-| **`large`** | 28.84s ± 0.39s | **13.28s ± 1.42s** | **2.2x faster** |
-| **`xlarge`** | 53.40s ± 2.65s | **35.43s ± 11.14s** | **1.5x faster** |
-
-### 3. Warm-Cache Package Installation (Pre-cached Wheels / Re-installs)
-
-| Workload Tier | Standard `pip install` (Cached) | Astral `uv pip install` (Cached) | Speedup Multiplier |
-| :--- | :---: | :---: | :---: |
-| **`xsmall`** | 1.53s ± 0.14s | **0.05s ± 0.00s** | **33.3x faster** |
-| **`small`** | 2.92s ± 0.31s | **0.06s ± 0.00s** | **51.3x faster** |
-| **`medium`** | 6.00s ± 0.86s | **0.09s ± 0.01s** | **70.6x faster** |
-| **`large`** | 13.06s ± 0.28s | **0.12s ± 0.01s** | **108.0x faster** |
-| **`xlarge`** | 17.59s ± 0.93s | **0.34s ± 0.01s** | **51.6x faster** |
-
-### 4. Poetry vs Astral `uv` CI Installation
-
-| Workload Tier | Standard `poetry install` (Cold) | Astral `uv` (Cold) | Cold Speedup | Standard `poetry install` (Warm) | Astral `uv` (Warm) | Warm Speedup |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`xsmall`** | 1.13s | **0.83s** | **1.4x** | 0.61s | **0.05s** | **13.3x** |
-| **`small`** | 2.24s | **2.45s** | **0.9x** | 1.04s | **0.06s** | **18.3x** |
-| **`medium`** | 3.49s | **3.55s** | **1.0x** | 2.01s | **0.09s** | **23.7x** |
-| **`large`** | 14.61s | **13.28s** | **1.1x** | 5.20s | **0.12s** | **43.0x** |
-| **`xlarge`** | 28.68s | **35.43s** | **0.8x** | 8.99s | **0.34s** | **26.4x** |
-
-### Key Benchmark Takeaways
-
-- **Virtual Environment Creation**: Astral `uv venv` creates clean environments in **~10ms (0.01s)**, which is **126x to 132x faster** than standard `python -m venv` (~1.15s).
-- **Repeat CI Builds (Warm Cache)**: In standard CI pipelines where dependencies are cached, Astral `uv` installs packages in **0.05s to 0.34s** across all workload sizes, providing **33x to 108x speedups** over standard `pip`.
-- **Cold CI Builds (No Cache)**: Even without pre-existing cache, Astral `uv` completes downloads and builds **1.5x to 3.6x faster** than `pip`.
-- **Poetry Workloads**: Astral `uv` warm installations run **13x to 43x faster** than standard `poetry install` (e.g. 0.12s vs 5.20s on the 75-package `large` tier).
+- **Sub-second Environment Setup**: `uv venv` creates isolated virtual environments in **~10ms**, providing clean isolation for every stage or test matrix run without performance penalties.
+- **Sub-second Repeat CI Builds**: On warm caches, installing even 75+ heavy packages (`numpy`, `pandas`, `scipy`, `scikit-learn`) drops from **13.06s down to 0.12s** (a **108x speedup**).
+- **Drop-in Compatibility**: Run standard requirements files via `uv pip install -r requirements.txt`, lockfiles via `uv sync --frozen`, or invoke ephemeral tools via `uvx ruff check .`.
+- **Persistent Workspace Cache**: Supply `uvCacheDir: '.uv-cache'` to maintain a shared, content-addressable wheel cache across executor runs.
 
 ---
 
 ## Pipeline Usage
 
-### 1. Declarative Pipeline (`withPython` Step)
-
-```groovy
-pipeline {
-    agent any
-    stages {
-        stage('Test with Python') {
-            steps {
-                // Dynamically resolve and provision standalone Python 3.12.15
-                withPython(version: '3.12.15') {
-                    sh 'python3 --version'
-                    sh 'pip --version'
-                    sh 'python3 -c "import sys; print(sys.executable)"'
-                }
-            }
-        }
-    }
-}
-```
-
-### 2. Isolated Virtual Environment
+### 1. Recommended: Declarative Pipeline with Astral `uv` & Virtualenv
 
 ```groovy
 pipeline {
@@ -156,39 +58,17 @@ pipeline {
     stages {
         stage('Build & Test') {
             steps {
-                // Automatically creates and activates .venv in the workspace
-                withPython(version: '3.12.15', venv: '.venv') {
-                    sh 'pip install pytest'
-                    sh 'pytest tests/'
-                }
-            }
-        }
-    }
-}
-```
-
-### 3. Ultra-Fast Package & Project Management with Astral `uv` (`uv: true`)
-
-Enable `uv: true` (or specify `uvVersion`) to provision Astral's Rust-based `uv` and `uvx` CLIs alongside Python. When `venv` is also specified, virtual environment creation automatically uses `uv venv` and binds `UV_PYTHON` to the virtual environment:
-
-```groovy
-pipeline {
-    agent any
-    stages {
-        stage('Fast venv + uv pip') {
-            steps {
-                // Creates .venv via `uv venv` and installs dependencies 10x-100x faster than pip
+                // Provisions standalone Python 3.12 and Astral uv, creating an isolated .venv
                 withPython(version: '3.12', venv: '.venv', uv: true) {
-                    sh 'uv --version'
                     sh 'uv pip install -r requirements.txt'
                     sh 'pytest tests/'
                 }
             }
         }
-        stage('Lockfile Sync & Ephemeral Tools (uv sync / uvx)') {
+        stage('Lockfile Sync & Ephemeral Tools') {
             steps {
-                // Pin a specific uv version and customize the uv cache directory
-                withPython(version: '3.12', uvVersion: '0.13.1', uvCacheDir: '.uv-cache') {
+                // Use uv sync for pyproject.toml projects and uvx for CLI utilities
+                withPython(version: '3.12', uv: true, uvCacheDir: '.uv-cache') {
                     sh 'uv sync --frozen'
                     sh 'uv run pytest'
                     sh 'uvx ruff check .'
@@ -199,59 +79,55 @@ pipeline {
 }
 ```
 
-### 4. Declarative Pipeline (`tools` Block)
+### 2. Standard Virtual Environment (Pip / Venv)
+
+```groovy
+pipeline {
+    agent any
+    stages {
+        stage('Test') {
+            steps {
+                withPython(version: '3.12.15', venv: '.venv') {
+                    sh 'pip install -r requirements.txt'
+                    sh 'pytest tests/'
+                }
+            }
+        }
+    }
+}
+```
+
+### 3. Declarative `tools` Directive
 
 ```groovy
 pipeline {
     agent any
     tools {
-        // References a configured tool installation in Manage Jenkins -> Tools
+        // References a pre-configured installation from Global Tool Configuration or JCasC
         python 'Python 3.12'
     }
     stages {
-        stage('Build & Test') {
+        stage('Test') {
             steps {
-                sh 'python3 -m unittest discover tests'
+                sh 'python3 --version'
+                sh 'pytest tests/'
             }
         }
     }
 }
 ```
 
-### 5. Cross-Platform Declarative Pipeline (Windows & Unix)
+### 4. GPU Acceleration with CUDA (`cuda: true`)
 
 ```groovy
 pipeline {
     agent any
     stages {
-        stage('Run Python') {
+        stage('GPU Training') {
             steps {
-                withPython(version: '3.12.15') {
-                    script {
-                        if (isUnix()) {
-                            sh 'python3 -c "import platform; print(\"Running on:\", platform.platform())"'
-                        } else {
-                            bat 'python -c "import platform; print(\"Running on:\", platform.platform())"'
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-```
-
-### 6. Deep Learning / GPU Acceleration with CUDA (`cuda: true`)
-
-```groovy
-pipeline {
-    agent any
-    stages {
-        stage('GPU Training & Inference') {
-            steps {
-                // Auto-detects agent CUDA installation, injects CUDA_HOME and PATH, with CPU fallback
+                // Probes agent CUDA drivers, injecting CUDA_HOME, LD_LIBRARY_PATH, and PATH
                 withPython(version: '3.12.15', cuda: true) {
-                    sh 'python -c "import torch; print(\"CUDA Available:\", torch.cuda.is_available())"'
+                    sh 'python -c "import torch; print(torch.cuda.is_available())"'
                 }
             }
         }
@@ -259,7 +135,7 @@ pipeline {
 }
 ```
 
-### 7. Corporate Mirror / Air-Gapped Networks (`mirrorUrl`, `uvMirrorUrl` & `system`)
+### 5. Corporate Mirror & Air-Gapped Networks
 
 ```groovy
 pipeline {
@@ -267,7 +143,7 @@ pipeline {
     stages {
         stage('Internal Mirror') {
             steps {
-                // Fetch standalone Python and uv archives from internal Artifactory/Nexus mirrors
+                // Download standalone Python and uv binaries from internal Artifactory/Nexus mirrors
                 withPython(
                     version: '3.12.15',
                     uv: true,
@@ -278,50 +154,80 @@ pipeline {
                 }
             }
         }
-        stage('Use Pre-installed System Python') {
-            steps {
-                withPython(system: true) {
-                    sh 'python3 --version'
-                }
-            }
-        }
     }
 }
 ```
 
 ---
 
-## Step Parameters Reference (`withPython`)
+## Configuration as Code (JCasC)
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `version` | String | `null` | Exact (e.g. `3.12.15`) or prefix (e.g. `3.12`) Python version to dynamically download and provision. |
-| `tool` | String | `null` | Name of pre-configured Python installation from Global Tool Configuration. |
-| `venv` | String / bool | `null` | Name or path of virtual environment (e.g. `'.venv'`). When provided, creates and activates the venv (using `uv venv` when `uv` is enabled). |
-| `uv` | boolean | `false` | When true, provisions Astral `uv` and `uvx` on `PATH` and sets `UV_PYTHON` to the resolved Python binary. |
-| `uvVersion` | String | `null` | Specific `uv` release version to provision (e.g. `'0.13.1'` or `'latest'`). Specifying `uvVersion` automatically enables `uv`. |
-| `uvMirrorUrl` | String | `null` | Base URL of internal corporate mirror hosting Astral `uv` release archives (falls back to `mirrorUrl` or `-Dio.jenkins.plugins.python.uvMirrorUrl`). |
-| `uvCacheDir` | String | `null` | Custom directory path for `uv`'s dependency cache (exports `UV_CACHE_DIR`). Relative paths resolve inside the build workspace. |
-| `system` | boolean | `false` | When true, discovers and uses agent's pre-installed system Python (`python3`/`python`). |
-| `home` | String | `null` | Explicit directory path to an existing Python installation on the agent. |
-| `clear` | boolean | `false` | When true with `venv`, recreates the virtual environment from scratch. |
-| `systemSitePackages` | boolean | `false` | When true with `venv`, gives the virtual environment access to system site-packages. |
-| `mirrorUrl`| String | `null` | Base URL of internal corporate mirror hosting python-build-standalone archives. |
-| `cuda` | boolean | `false` | When true, probes and injects CUDA GPU environment variables (`CUDA_HOME`, `PATH`, `LD_LIBRARY_PATH`). |
-| `cudaHome` | String | `null` | Explicit path override for CUDA toolkit on the agent. |
+You can manage Python installations and automated Astral `uv` bundling declaratively using Jenkins Configuration as Code (`jenkins.yaml`):
+
+```yaml
+tool:
+  python:
+    installations:
+      - name: "Python 3.12"
+        properties:
+          - installSource:
+              installers:
+                - pythonStandalone:
+                    id: "3.12.15"
+                    installUv: true
+                    uvVersion: "latest" # or pin a specific version, e.g. "0.13.1"
+      - name: "Python 3.11"
+        properties:
+          - installSource:
+              installers:
+                - pythonStandalone:
+                    id: "3.11.10"
+                    installUv: true
+      - name: "Python 3.12 (Internal Mirror)"
+        properties:
+          - installSource:
+              installers:
+                - pythonStandalone:
+                    id: "3.12.15"
+                    installUv: true
+                    mirrorUrl: "https://artifactory.corp.internal/python-dist/"
+                    uvMirrorUrl: "https://artifactory.corp.internal/uv-dist/"
+      - name: "System Python"
+        home: "/usr/bin/python3"
+```
 
 ---
 
 ## Global Tool Configuration (Jenkins UI)
 
 1. Navigate to **Manage Jenkins** &rarr; **Tools**.
-2. Scroll to **Python**.
-3. Click **Add Python**.
-4. Configure name (e.g., `Python 3.12`).
-5. Select **Install automatically** &rarr; **Install Standalone Python from Astral-sh**.
-6. Select your desired Python version from the dropdown list.
-7. *(Optional)* Check **Install Astral uv alongside Python** (and optionally specify an **Astral uv Version**) to bundle `uv` and `uvx` directly inside the tool's `bin/` or `Scripts/` directory.
-8. Click **Save**.
+2. Scroll to **Python** and click **Add Python**.
+3. Configure the name (e.g. `Python 3.12`).
+4. Under **Install automatically**, select **Install Standalone Python from Astral-sh**.
+5. Select your desired Python version (e.g. `3.12.15`).
+6. *(Optional)* Check **Install Astral uv alongside Python** (and optionally set an **Astral uv Version**) to bundle `uv` and `uvx`.
+7. Click **Save**.
+
+---
+
+## Step Parameters Reference (`withPython`)
+
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `version` | String | `null` | Exact (e.g. `'3.12.15'`) or prefix (e.g. `'3.12'`) Python version to dynamically provision. |
+| `tool` | String | `null` | Name of pre-configured Python installation from Global Tool Configuration or JCasC. |
+| `venv` | String / bool | `null` | Virtualenv directory path (e.g. `'.venv'`). When provided, creates and activates the venv (via `uv venv` when `uv` is enabled). |
+| `uv` | boolean | `false` | When true, provisions Astral `uv` and `uvx` on `PATH` and binds `UV_PYTHON`. |
+| `uvVersion` | String | `null` | Specific `uv` version to install (e.g. `'0.13.1'` or `'latest'`). Automatically enables `uv`. |
+| `uvCacheDir` | String | `null` | Custom directory path for `uv` dependency cache (`UV_CACHE_DIR`). |
+| `uvMirrorUrl` | String | `null` | Internal mirror base URL for Astral `uv` release archives. |
+| `mirrorUrl` | String | `null` | Internal mirror base URL for standalone Python release archives. |
+| `clear` | boolean | `false` | When true with `venv`, recreates the virtual environment from scratch. |
+| `systemSitePackages` | boolean | `false` | When true with `venv`, gives the virtual environment access to system site-packages. |
+| `system` | boolean | `false` | Discovers and uses the agent pre-installed system Python (`python3`/`python`). |
+| `home` | String | `null` | Explicit directory path to an existing Python installation on the agent. |
+| `cuda` | boolean | `false` | Probes agent CUDA toolkit and injects `CUDA_HOME`, `PATH`, and `LD_LIBRARY_PATH`. |
+| `cudaHome` | String | `null` | Explicit path override for CUDA toolkit on the agent. |
 
 ---
 
@@ -330,11 +236,11 @@ pipeline {
 For air-gapped Jenkins controllers without outbound internet access:
 - **Option 1**: Place `python-versions.json` directly into `$JENKINS_HOME/python-versions.json`.
 - **Option 2**: Launch Jenkins with the system property:
-  ```
+  ```bash
   -Dio.jenkins.plugins.python.versionsFile=/var/jenkins_home/my-custom-versions.json
   ```
 - **Option 3**: Configure internal URL mirrors for dynamic catalog updates and binary downloads:
-  ```
+  ```bash
   -Dio.jenkins.plugins.python.versionsUrl=https://internal-artifactory.corp/python/versions.json
   -Dio.jenkins.plugins.python.mirrorUrl=https://internal-artifactory.corp/python-dist/
   -Dio.jenkins.plugins.python.uvMirrorUrl=https://internal-artifactory.corp/uv-dist/
@@ -344,7 +250,7 @@ For air-gapped Jenkins controllers without outbound internet access:
 
 ## Updating Upstream Python Versions
 
-The plugin automatically checks and caches new releases from `astral-sh/python-build-standalone`. Maintainers can also update the bundled catalog:
+The plugin automatically checks and caches new releases from `astral-sh/python-build-standalone`. Maintainers can also manually update the bundled catalog:
 
 ```bash
 python scripts/update-python-versions.py
